@@ -27,9 +27,9 @@ use pixel_format::PixelFormatState;
 #[derive(Debug, Default)]
 pub struct App {
     filepath: Option<PathBuf>,
-    width: usize,
-    height: usize,
-    offset: usize,
+    width: String,
+    height: String,
+    offset: String,
     pixel_format: PixelFormatState,
     ignore_alpha: bool,
     image_format: ImageFormat,
@@ -53,13 +53,13 @@ impl App {
                     self.filepath = path;
                 }
             }
-            Message::TextInputChanged(input, val) => {
-                if let Ok(num) = val.parse::<usize>() {
-                    match input {
-                        TextInput::Width => self.width = num,
-                        TextInput::Height => self.height = num,
-                        TextInput::Offset => self.offset = num,
-                        TextInput::PaletteOffset => self.palette.offset = num,
+            Message::TextInputChanged(kind, input) => {
+                if input.chars().all(char::is_numeric) || input.is_empty() {
+                    match kind {
+                        TextInput::Width => self.width = input,
+                        TextInput::Height => self.height = input,
+                        TextInput::Offset => self.offset = input,
+                        TextInput::PaletteOffset => self.palette.offset = input,
                     }
                 }
             }
@@ -86,7 +86,7 @@ impl App {
     pub fn view(&self) -> Element<Message> {
         let filepath_view = self.filepath_view();
         let dim_view = self.dimension_view();
-        let offset = TextInput::Offset.view("Offset:", self.offset.to_string());
+        let offset = TextInput::Offset.view("Offset:", &self.offset);
         let pixel_format_view = self.pixel_format_view();
         let image_format_view = self.image_format_view();
         let process_button = self.process_button();
@@ -100,7 +100,7 @@ impl App {
             pixel_format_view,
             image_format_view,
             vertical_space(),
-            column![]
+            Column::new()
                 .push_maybe(error_view)
                 .push(process_button)
                 .spacing(SPACING)
@@ -148,8 +148,8 @@ impl App {
 
     pub fn dimension_view(&self) -> Row<Message> {
         row![
-            TextInput::Width.view("Width:", self.width.to_string()),
-            TextInput::Height.view("Height:", self.height.to_string()),
+            TextInput::Width.view("Width:", &self.width),
+            TextInput::Height.view("Height:", &self.height),
         ]
         .spacing(SPACING)
     }
@@ -235,27 +235,32 @@ impl App {
 }
 
 fn process_image(app: &App) -> Result<Handle, String> {
-    let Some(path) = app.filepath.as_deref() else {
-        return Err("file path is empty".into());
-    };
+    let path = app.filepath.as_deref().ok_or("file is empty")?;
+    let width = app.width.parse::<usize>().map_err(|_| "width is empty")?;
+    let height = app.height.parse::<usize>().map_err(|_| "height is empty")?;
+    let offset = app.offset.parse::<usize>().map_err(|_| "offset is empty")?;
 
-    if app.width == 0 || app.height == 0 {
+    if width == 0 || height == 0 {
         return Err("width or height cannot be zero".into());
     }
 
     let file = File::open(path).map_err(|err| err.to_string())?;
 
     match app.image_format {
-        ImageFormat::Linear => linear_image(app, file),
+        ImageFormat::Linear => linear_image(app, file, width, height, offset),
         ImageFormat::LinearIndexed => Err("TODO".into()),
     }
 }
 
-pub fn linear_image(app: &App, mut file: File) -> Result<Handle, String> {
+pub fn linear_image(
+    app: &App,
+    mut file: File,
+    w: usize,
+    h: usize,
+    offset: usize,
+) -> Result<Handle, String> {
     use pixel_format::{rgb_order, rgba_order};
 
-    let w = app.width;
-    let h = app.height;
     let pixel_count = w * h;
     let pixel_format = app.pixel_format.selected;
     let bytes_per_pixel = pixel_format.bytes_per_pixel();
@@ -265,12 +270,12 @@ pub fn linear_image(app: &App, mut file: File) -> Result<Handle, String> {
         return Err("invalid component order".into());
     };
 
-    file.seek(Start(app.offset as _))
+    file.seek(Start(offset as _))
         .map_err(|err| err.to_string())?;
     file.read_exact(&mut pixel_data)
         .map_err(|err| err.to_string())?;
 
-    let mut rgba = vec![0; app.width * app.height * 4];
+    let mut rgba = vec![0; w * h * 4];
     let chunks = pixel_data.chunks_exact(bytes_per_pixel);
     match pixel_format {
         PixelFormat::RGBA8888 => {
@@ -307,6 +312,8 @@ pub fn linear_image(app: &App, mut file: File) -> Result<Handle, String> {
                 color[1] = ((pixel & 0b1111_0000) >> 4) as u8;
                 color[2] = ((pixel & 0b1111_0000_0000) >> 8) as u8;
                 color[3] = ((pixel & 0b1111_0000_0000_0000) >> 12) as u8;
+
+                // TODO
 
                 rgba[i * 4 + 0] = color[r_i];
                 rgba[i * 4 + 1] = color[g_i];
@@ -345,4 +352,9 @@ pub fn linear_image(app: &App, mut file: File) -> Result<Handle, String> {
     }
 
     Ok(Handle::from_rgba(w as _, h as _, rgba))
+}
+
+#[allow(dead_code)]
+fn max_value_from_bits(bits: usize) -> usize {
+    (1 << bits) - 1
 }

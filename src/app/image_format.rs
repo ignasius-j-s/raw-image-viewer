@@ -34,9 +34,9 @@ impl ImageFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PaletteInfo {
-    pub offset: usize,
+    pub offset: String,
     pub bpp: Bpp,
 }
 
@@ -46,7 +46,7 @@ impl PaletteInfo {
             return None;
         }
 
-        let pal_view = TextInput::PaletteOffset.view("Palette offset:", self.offset.to_string());
+        let pal_view = TextInput::PaletteOffset.view("Palette offset:", &self.offset);
         let bpp_view = self.bpp.view();
 
         column![pal_view, bpp_view].spacing(SPACING).into()
