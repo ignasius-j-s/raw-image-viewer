@@ -5,9 +5,9 @@ use iced::{
 
 use super::{
     image_format::{Bpp, ImageFormat},
-    pixel_format::PixelFormat,
+    pixel_format::{Endian, PixelFormat},
 };
-use crate::SPACING;
+use crate::{LABEL_WIDTH, SPACING};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -15,6 +15,7 @@ pub enum Message {
     TextInputChanged(TextInput, String),
     PixelFormatChanged(PixelFormat),
     OrderChanged(String),
+    EndianChanged(Endian),
     IgnoreAlphaChanged(bool),
     ImageFormatChanged(ImageFormat),
     PaletteBppChanged(Bpp),
@@ -31,7 +32,7 @@ pub enum TextInput {
 
 impl TextInput {
     pub fn view(&self, label: &'static str, input: &str) -> Row<Message> {
-        let label = text(label).width(50);
+        let label = text(label).width(LABEL_WIDTH);
         let input = text_input("", input)
             .on_input(|new_value| Message::TextInputChanged(*self, new_value))
             .width(80);

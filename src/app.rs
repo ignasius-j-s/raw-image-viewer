@@ -13,7 +13,6 @@ use iced::{
         row, text, text_input, vertical_space,
     },
 };
-use pixel_format::PixelFormat;
 
 mod image_format;
 mod message;
@@ -22,7 +21,7 @@ mod pixel_format;
 use crate::SPACING;
 use image_format::{ImageFormat, PaletteInfo};
 use message::{Message, TextInput};
-use pixel_format::PixelFormatState;
+use pixel_format::{Endian, PixelFormat, PixelFormatState};
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -68,6 +67,7 @@ impl App {
                 self.pixel_format.component_order = pixel_format.default_order()
             }
             Message::OrderChanged(order) => self.pixel_format.component_order = order,
+            Message::EndianChanged(endian) => self.pixel_format.endian = endian,
             Message::IgnoreAlphaChanged(val) => self.ignore_alpha = val,
             Message::ImageFormatChanged(image_format) => self.image_format = image_format,
             Message::PaletteBppChanged(bpp) => self.palette.bpp = bpp,
@@ -306,7 +306,10 @@ pub fn linear_image(
             let mut color = [0, 0, 0, 0];
 
             for (i, chunk) in chunks.enumerate() {
-                let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
+                let pixel = match app.pixel_format.endian {
+                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
+                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
+                };
 
                 color[0] = (pixel & 0xF) as u8 * 17;
                 color[1] = ((pixel & 0xF0) >> 4) as u8 * 17;
@@ -326,7 +329,10 @@ pub fn linear_image(
             let mut color = [0, 0, 0, 0];
 
             for (i, chunk) in chunks.enumerate() {
-                let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
+                let pixel = match app.pixel_format.endian {
+                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
+                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
+                };
 
                 color[0] = (pixel & 0x1F) as u8 * 8;
                 color[1] = ((pixel & 0x3E0) >> 5) as u8 * 8;
@@ -351,7 +357,10 @@ pub fn linear_image(
             let a = 255;
 
             for (i, chunk) in chunks.enumerate() {
-                let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
+                let pixel = match app.pixel_format.endian {
+                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
+                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
+                };
 
                 color[0] = (pixel & 0x1F) as u8 * 8;
                 color[1] = ((pixel & 0x7E0) >> 5) as u8 * 4;

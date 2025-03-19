@@ -1,10 +1,10 @@
 use iced::{
     alignment::Vertical,
-    widget::{Row, combo_box, row, text, text_input},
+    widget::{Column, Row, column, combo_box, radio, row, text, text_input},
 };
 
 use super::message::Message;
-use crate::SPACING;
+use crate::{LABEL_WIDTH, SPACING};
 use PixelFormat::*;
 
 #[derive(Debug)]
@@ -12,6 +12,7 @@ pub struct PixelFormatState {
     pub state: combo_box::State<PixelFormat>,
     pub selected: PixelFormat,
     pub component_order: String,
+    pub endian: Endian,
 }
 
 impl Default for PixelFormatState {
@@ -21,13 +22,14 @@ impl Default for PixelFormatState {
             state: combo_box::State::new(PixelFormat::all()),
             selected: default,
             component_order: default.default_order(),
+            endian: Default::default(),
         }
     }
 }
 
 impl PixelFormatState {
-    pub fn view(&self) -> Row<Message> {
-        let label = text("Format:").width(50);
+    pub fn view(&self) -> Column<Message> {
+        let label = text("Format:").width(LABEL_WIDTH);
         let combo_box = combo_box(
             &self.state,
             "",
@@ -37,7 +39,7 @@ impl PixelFormatState {
         .width(80);
 
         let order: Option<Row<Message>> = if self.is_orderable() {
-            let label = text("Order:").width(50);
+            let label = text("Order:").width(LABEL_WIDTH);
             let input = text_input("", &self.component_order)
                 .width(80)
                 .on_input(Message::OrderChanged);
@@ -50,14 +52,39 @@ impl PixelFormatState {
             None
         };
 
-        row![label, combo_box]
+        let endian: Option<Row<Message>> = if self.selected.use_endian() {
+            self.endian.view().into()
+        } else {
+            None
+        };
+
+        let row = row![label, combo_box]
             .push_maybe(order)
             .spacing(SPACING)
-            .align_y(Vertical::Center)
+            .align_y(Vertical::Center);
+
+        column![row].push_maybe(endian).spacing(SPACING)
     }
 
     pub fn is_orderable(&self) -> bool {
         self.selected.is_orderable()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Endian {
+    #[default]
+    LE,
+    BE,
+}
+
+impl Endian {
+    pub fn view(&self) -> Row<Message> {
+        let label = text("Endian:").width(LABEL_WIDTH);
+        let le = radio("LE", Self::LE, Some(*self), Message::EndianChanged);
+        let be = radio("BE", Self::BE, Some(*self), Message::EndianChanged);
+
+        row![label, le, be].spacing(SPACING)
     }
 }
 
@@ -94,6 +121,10 @@ impl PixelFormat {
             RGBA8888 | RGBA4444 | RGBA5551 => true,
             _ => false,
         }
+    }
+
+    pub fn use_endian(&self) -> bool {
+        self.bytes_per_pixel() == 2
     }
 
     pub fn default_order(&self) -> String {
