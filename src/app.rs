@@ -273,7 +273,7 @@ pub fn linear_image(
     file.seek(Start(offset as _))
         .map_err(|err| err.to_string())?;
     file.read_exact(&mut pixel_data)
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
 
     let mut rgba = vec![0; w * h * 4];
     let chunks = pixel_data.chunks_exact(bytes_per_pixel);
