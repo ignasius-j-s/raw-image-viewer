@@ -4,6 +4,7 @@ use iced::{Settings, Size};
 mod app;
 
 const SPACING: u16 = 10;
+const LABEL_WIDTH: u16 = 50;
 
 fn main() -> Result<(), iced::Error> {
     let size = Size {
