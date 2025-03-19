@@ -273,7 +273,7 @@ pub fn linear_image(
     file.seek(Start(offset as _))
         .map_err(|err| err.to_string())?;
     file.read_exact(&mut pixel_data)
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
 
     let mut rgba = vec![0; w * h * 4];
     let chunks = pixel_data.chunks_exact(bytes_per_pixel);
@@ -292,7 +292,7 @@ pub fn linear_image(
         }
         PixelFormat::RGB888 => {
             let (r_i, g_i, b_i) = rgb_order(&order)?;
-            let a = u8::MAX;
+            let a = 255;
 
             for (i, chunk) in chunks.enumerate() {
                 rgba[i * 4 + 0] = chunk[r_i];
@@ -308,21 +308,65 @@ pub fn linear_image(
             for (i, chunk) in chunks.enumerate() {
                 let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
 
-                color[0] = (pixel & 0b1111) as u8;
-                color[1] = ((pixel & 0b1111_0000) >> 4) as u8;
-                color[2] = ((pixel & 0b1111_0000_0000) >> 8) as u8;
-                color[3] = ((pixel & 0b1111_0000_0000_0000) >> 12) as u8;
+                color[0] = (pixel & 0xF) as u8 * 17;
+                color[1] = ((pixel & 0xF0) >> 4) as u8 * 17;
+                color[2] = ((pixel & 0xF00) >> 8) as u8 * 17;
+                color[3] = ((pixel & 0xF000) >> 12) as u8 * 17;
 
-                // TODO
+                let a = if app.ignore_alpha { 255 } else { color[a_i] };
 
                 rgba[i * 4 + 0] = color[r_i];
                 rgba[i * 4 + 1] = color[g_i];
                 rgba[i * 4 + 2] = color[b_i];
-                rgba[i * 4 + 3] = color[a_i];
+                rgba[i * 4 + 3] = a;
             }
         }
-        PixelFormat::RGBA5551 => return Err("TODO".into()),
-        PixelFormat::RGB565 => return Err("TODO".into()),
+        PixelFormat::RGBA5551 => {
+            let (r_i, g_i, b_i, a_i) = rgba_order(&order)?;
+            let mut color = [0, 0, 0, 0];
+
+            for (i, chunk) in chunks.enumerate() {
+                let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
+
+                color[0] = (pixel & 0x1F) as u8 * 8;
+                color[1] = ((pixel & 0x3E0) >> 5) as u8 * 8;
+                color[2] = ((pixel & 0x7C00) >> 10) as u8 * 8;
+                color[3] = ((pixel & 0x8000) >> 15) as u8 * 255;
+
+                color[0] += color[0] / 32;
+                color[1] += color[1] / 32;
+                color[2] += color[2] / 32;
+
+                let a = if app.ignore_alpha { 255 } else { color[a_i] };
+
+                rgba[i * 4 + 0] = color[r_i];
+                rgba[i * 4 + 1] = color[g_i];
+                rgba[i * 4 + 2] = color[b_i];
+                rgba[i * 4 + 3] = a;
+            }
+        }
+        PixelFormat::RGB565 => {
+            let (r_i, g_i, b_i) = rgb_order(&order)?;
+            let mut color = [0, 0, 0];
+            let a = 255;
+
+            for (i, chunk) in chunks.enumerate() {
+                let pixel = u16::from_le_bytes([chunk[0], chunk[1]]);
+
+                color[0] = (pixel & 0x1F) as u8 * 8;
+                color[1] = ((pixel & 0x7E0) >> 5) as u8 * 4;
+                color[2] = ((pixel & 0xF800) >> 11) as u8 * 8;
+
+                color[0] += color[0] / 32;
+                color[1] += color[1] / 64;
+                color[2] += color[2] / 32;
+
+                rgba[i * 4 + 0] = color[r_i];
+                rgba[i * 4 + 1] = color[g_i];
+                rgba[i * 4 + 2] = color[b_i];
+                rgba[i * 4 + 3] = a;
+            }
+        }
         PixelFormat::R8 => {
             for (i, chunk) in chunks.enumerate() {
                 rgba[i * 4 + 0] = chunk[0];
@@ -352,9 +396,4 @@ pub fn linear_image(
     }
 
     Ok(Handle::from_rgba(w as _, h as _, rgba))
-}
-
-#[allow(dead_code)]
-fn max_value_from_bits(bits: usize) -> usize {
-    (1 << bits) - 1
 }
