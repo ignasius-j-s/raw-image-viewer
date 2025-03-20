@@ -85,7 +85,7 @@ impl App {
         }
 
         if process {
-            match process_image(&self) {
+            match process_image(self) {
                 Ok(handle) => {
                     self.image = Some(handle);
                     self.error = None
@@ -258,23 +258,16 @@ impl App {
     }
 
     fn error_view(&self) -> Option<Row<Message>> {
-        let Some(message) = self.error.as_ref() else {
-            return None;
-        };
+        let message = self.error.as_ref()?;
 
         Some(row![text(message).style(iced::widget::text::danger)].spacing(SPACING))
     }
 
     fn on_key_enter(key: Key, _: Modifiers) -> Option<Message> {
         match key {
-            Key::Named(named) => match named {
-                Named::Enter => return Some(Message::ProcessImage),
-                _ => (),
-            },
-            _ => (),
+            Key::Named(Named::Enter) => Some(Message::ProcessImage),
+            _ => None,
         }
-
-        return None;
     }
 }
 
@@ -328,7 +321,7 @@ pub fn linear_image(
             for (i, chunk) in chunks.enumerate() {
                 let a = if app.ignore_alpha { 255 } else { chunk[a_i] };
 
-                rgba[i * 4 + 0] = chunk[r_i];
+                rgba[i * 4] = chunk[r_i];
                 rgba[i * 4 + 1] = chunk[g_i];
                 rgba[i * 4 + 2] = chunk[b_i];
                 rgba[i * 4 + 3] = a;
@@ -339,7 +332,7 @@ pub fn linear_image(
             let a = 255;
 
             for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4 + 0] = chunk[r_i];
+                rgba[i * 4] = chunk[r_i];
                 rgba[i * 4 + 1] = chunk[g_i];
                 rgba[i * 4 + 2] = chunk[b_i];
                 rgba[i * 4 + 3] = a;
@@ -362,7 +355,7 @@ pub fn linear_image(
 
                 let a = if app.ignore_alpha { 255 } else { color[a_i] };
 
-                rgba[i * 4 + 0] = color[r_i];
+                rgba[i * 4] = color[r_i];
                 rgba[i * 4 + 1] = color[g_i];
                 rgba[i * 4 + 2] = color[b_i];
                 rgba[i * 4 + 3] = a;
@@ -389,7 +382,7 @@ pub fn linear_image(
 
                 let a = if app.ignore_alpha { 255 } else { color[a_i] };
 
-                rgba[i * 4 + 0] = color[r_i];
+                rgba[i * 4] = color[r_i];
                 rgba[i * 4 + 1] = color[g_i];
                 rgba[i * 4 + 2] = color[b_i];
                 rgba[i * 4 + 3] = a;
@@ -414,7 +407,7 @@ pub fn linear_image(
                 color[1] += color[1] / 64;
                 color[2] += color[2] / 32;
 
-                rgba[i * 4 + 0] = color[r_i];
+                rgba[i * 4] = color[r_i];
                 rgba[i * 4 + 1] = color[g_i];
                 rgba[i * 4 + 2] = color[b_i];
                 rgba[i * 4 + 3] = a;
@@ -422,7 +415,7 @@ pub fn linear_image(
         }
         PixelFormat::R8 => {
             for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4 + 0] = chunk[0];
+                rgba[i * 4] = chunk[0];
                 rgba[i * 4 + 3] = 255;
             }
         }
@@ -440,7 +433,7 @@ pub fn linear_image(
         }
         PixelFormat::L8 => {
             for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4 + 0] = chunk[0];
+                rgba[i * 4] = chunk[0];
                 rgba[i * 4 + 1] = chunk[0];
                 rgba[i * 4 + 2] = chunk[0];
                 rgba[i * 4 + 3] = 255;

@@ -110,17 +110,11 @@ impl PixelFormat {
     }
 
     fn is_orderable(&self) -> bool {
-        match self {
-            RGBA8888 | RGB888 | RGBA4444 | RGBA5551 | RGB565 => true,
-            _ => false,
-        }
+        matches!(self, RGBA8888 | RGB888 | RGBA4444 | RGBA5551 | RGB565)
     }
 
     pub fn use_alpha(&self) -> bool {
-        match self {
-            RGBA8888 | RGBA4444 | RGBA5551 => true,
-            _ => false,
-        }
+        matches!(self, RGBA8888 | RGBA4444 | RGBA5551)
     }
 
     pub fn use_endian(&self) -> bool {
@@ -153,7 +147,7 @@ impl PixelFormat {
             _ => return Some(vec![]),
         }
 
-        return None;
+        None
     }
 
     pub fn bytes_per_pixel(&self) -> usize {
@@ -172,7 +166,7 @@ impl std::fmt::Display for PixelFormat {
     }
 }
 
-pub fn rgba_order(order: &Vec<char>) -> Result<(usize, usize, usize, usize), String> {
+pub fn rgba_order(order: &[char]) -> Result<(usize, usize, usize, usize), String> {
     let err_message = || String::from("invalid rgba order");
 
     Ok((
@@ -195,7 +189,7 @@ pub fn rgba_order(order: &Vec<char>) -> Result<(usize, usize, usize, usize), Str
     ))
 }
 
-pub fn rgb_order(order: &Vec<char>) -> Result<(usize, usize, usize), String> {
+pub fn rgb_order(order: &[char]) -> Result<(usize, usize, usize), String> {
     let err_message = || String::from("invalid rgb order");
 
     Ok((
