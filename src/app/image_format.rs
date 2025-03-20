@@ -7,7 +7,7 @@ use crate::SPACING;
 pub enum ImageFormat {
     #[default]
     Linear,
-    LinearIndexed,
+    Indexed,
 }
 
 impl ImageFormat {
@@ -20,8 +20,8 @@ impl ImageFormat {
             Message::ImageFormatChanged,
         );
         let linear_indexed = radio(
-            "Linear Indexed",
-            Self::LinearIndexed,
+            "Indexed",
+            Self::Indexed,
             Some(*self),
             Message::ImageFormatChanged,
         );
@@ -30,7 +30,7 @@ impl ImageFormat {
     }
 
     pub fn use_palette(&self) -> bool {
-        *self == Self::LinearIndexed
+        *self == Self::Indexed
     }
 }
 
@@ -52,10 +52,12 @@ impl PaletteInfo {
         column![pal_view, bpp_view].spacing(SPACING).into()
     }
 
-    // not yet used
-    #[allow(dead_code)]
-    pub fn count(&self) -> usize {
+    pub fn color_count(&self) -> usize {
         self.bpp.color_count()
+    }
+
+    pub fn offset(&self) -> Result<usize, std::num::ParseIntError> {
+        self.offset.parse::<usize>()
     }
 }
 

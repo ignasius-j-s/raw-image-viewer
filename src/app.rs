@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::SeekFrom::*;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::slice::ChunksExact;
 
 use iced::{
     Element, Length,
@@ -19,7 +20,7 @@ mod message;
 mod pixel_format;
 
 use crate::SPACING;
-use image_format::{ImageFormat, PaletteInfo};
+use image_format::{Bpp, ImageFormat, PaletteInfo};
 use message::{Message, TextInput};
 use pixel_format::{Endian, PixelFormat, PixelFormatState};
 
@@ -285,7 +286,7 @@ fn process_image(app: &App) -> Result<Handle, String> {
 
     match app.image_format {
         ImageFormat::Linear => linear_image(app, file, width, height, offset),
-        ImageFormat::LinearIndexed => Err("TODO".into()),
+        ImageFormat::Indexed => indexed_image(app, file, width, height, offset),
     }
 }
 
@@ -296,24 +297,90 @@ pub fn linear_image(
     h: usize,
     offset: usize,
 ) -> Result<Handle, String> {
-    use pixel_format::{rgb_order, rgba_order};
-
-    let pixel_count = w * h;
     let pixel_format = app.pixel_format.selected;
+    let pixel_count = w * h;
     let bytes_per_pixel = pixel_format.bytes_per_pixel();
+
     let mut pixel_data = vec![0; pixel_count * bytes_per_pixel];
+    file.seek(Start(offset as _))
+        .map_err(|err| err.to_string())?;
+    file.read_exact(&mut pixel_data)
+        .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
 
-    let Some(order) = pixel_format.valid_order(&app.pixel_format.component_order) else {
-        return Err("invalid component order".into());
+    let pixel_chunks = pixel_data.chunks_exact(bytes_per_pixel);
+    let mut rgba = vec![0; w * h * 4];
+    fill_rgba(app, &mut rgba, pixel_chunks)?;
+
+    Ok(Handle::from_rgba(w as _, h as _, rgba))
+}
+
+fn indexed_image(
+    app: &App,
+    mut file: File,
+    w: usize,
+    h: usize,
+    offset: usize,
+) -> Result<Handle, String> {
+    let palette = &app.palette;
+    let palette_offset = palette.offset().map_err(|_| "palette offset is empty")?;
+
+    let pixel_format = app.pixel_format.selected;
+    let color_count = palette.color_count();
+    let bytes_per_color = pixel_format.bytes_per_pixel();
+
+    let mut palette_data = vec![0; color_count * bytes_per_color];
+    file.seek(Start(palette_offset as _))
+        .map_err(|err| err.to_string())?;
+    file.read_exact(&mut palette_data)
+        .map_err(|err| format!("failed to fill palette data buffer. {}", err.kind()))?;
+
+    let color_chunks = palette_data.chunks_exact(bytes_per_color);
+    let mut palette_rgba = vec![0; color_count * 4];
+    fill_rgba(app, &mut palette_rgba, color_chunks)?;
+
+    let mut pixel_data = match palette.bpp {
+        Bpp::Bpp4 => vec![0; w * h / 2],
+        Bpp::Bpp8 => vec![0; w * h],
     };
-
     file.seek(Start(offset as _))
         .map_err(|err| err.to_string())?;
     file.read_exact(&mut pixel_data)
         .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
 
     let mut rgba = vec![0; w * h * 4];
-    let chunks = pixel_data.chunks_exact(bytes_per_pixel);
+    match palette.bpp {
+        Bpp::Bpp4 => {
+            for (i, pixels) in pixel_data.into_iter().enumerate() {
+                let src1 = (pixels & 0xF) as usize * 4;
+                let src2 = ((pixels & 0xF0) >> 4) as usize * 4;
+                let dst1 = i * 2 * 4;
+                let dst2 = dst1 + 4;
+
+                rgba[dst1..dst1 + 4].clone_from_slice(&palette_rgba[src1..src1 + 4]);
+                rgba[dst2..dst2 + 4].clone_from_slice(&palette_rgba[src2..src2 + 4]);
+            }
+        }
+        Bpp::Bpp8 => {
+            for (i, pixel) in pixel_data.into_iter().enumerate() {
+                let src = pixel as usize * 4;
+                let dst = i * 4;
+
+                rgba[dst..dst + 4].clone_from_slice(&palette_rgba[src..src + 4]);
+            }
+        }
+    }
+
+    Ok(Handle::from_rgba(w as _, h as _, rgba))
+}
+
+fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), String> {
+    use pixel_format::{rgb_order, rgba_order};
+
+    let pixel_format = app.pixel_format.selected;
+    let Some(order) = pixel_format.valid_order(&app.pixel_format.component_order) else {
+        return Err("invalid component order".into());
+    };
+
     match pixel_format {
         PixelFormat::RGBA8888 => {
             let (r_i, g_i, b_i, a_i) = rgba_order(&order)?;
@@ -441,5 +508,5 @@ pub fn linear_image(
         }
     }
 
-    Ok(Handle::from_rgba(w as _, h as _, rgba))
+    Ok(())
 }
