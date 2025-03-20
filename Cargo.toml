@@ -1,6 +1,6 @@
 [package]
 name = "raw-image-viewer"
-description = "A tool to help identifying an unknown image file format"
+description = "A tool to help analyzing an unknown image file format"
 version = "0.1.0"
 edition = "2024"
 
