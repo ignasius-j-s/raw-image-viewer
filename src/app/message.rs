@@ -1,6 +1,6 @@
 use iced::{
     alignment::Vertical,
-    widget::{Row, row, text, text_input},
+    widget::{Row, image::FilterMethod, row, text, text_input},
 };
 
 use super::{
@@ -20,6 +20,7 @@ pub enum Message {
     ImageFormatChanged(ImageFormat),
     PaletteBppChanged(Bpp),
     ProcessImage,
+    FilterChanged(FilterMethod),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 
 use iced::{
     Element, Length,
-    alignment::Vertical,
+    alignment::{Horizontal, Vertical},
     keyboard::{Key, Modifiers, key::Named},
     widget::{
-        Checkbox, Column, Container, Row, button, checkbox, column, container,
+        Checkbox, Column, Container, Row, Stack, button, checkbox, column, container,
         image::{FilterMethod, Handle, viewer},
-        row, text, text_input, vertical_space,
+        radio, row, stack, text, text_input, vertical_space,
     },
 };
 
@@ -80,6 +80,7 @@ impl App {
                     self.error = Some(message);
                 }
             },
+            Message::FilterChanged(filter_method) => self.filter_method = filter_method,
         }
     }
 
@@ -181,7 +182,7 @@ impl App {
         button("Process").on_press(Message::ProcessImage)
     }
 
-    pub fn image_view(&self) -> Container<Message> {
+    pub fn image_view(&self) -> Stack<Message> {
         fn style(theme: &iced::Theme) -> container::Style {
             let color = iced::Color {
                 r: 0.0,
@@ -206,11 +207,41 @@ impl App {
             None => text("no preview").into(),
         };
 
-        container(content)
-            .center(Length::Shrink)
+        let container = container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(style)
+            .align_y(Vertical::Center)
+            .align_x(Horizontal::Center)
+            .style(style);
+
+        let filter_view = self.filter_view();
+
+        stack([container.into(), filter_view.into()])
+    }
+
+    fn filter_view(&self) -> Container<Message> {
+        let linear = radio(
+            "Linear",
+            FilterMethod::Linear,
+            Some(self.filter_method),
+            Message::FilterChanged,
+        );
+        let nearest = radio(
+            "Nearest",
+            FilterMethod::Nearest,
+            Some(self.filter_method),
+            Message::FilterChanged,
+        );
+
+        let content = row![linear, nearest].spacing(SPACING);
+
+        container(content)
+            .padding(SPACING)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(container::transparent)
+            .align_y(Vertical::Bottom)
+            .align_x(Horizontal::Center)
     }
 
     fn error_view(&self) -> Option<Row<Message>> {
