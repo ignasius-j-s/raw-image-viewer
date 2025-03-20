@@ -44,6 +44,8 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) {
+        let mut process = false;
+
         match message {
             Message::PickFile => {
                 let path = rfd::FileDialog::new().set_title("Open").pick_file();
@@ -64,14 +66,26 @@ impl App {
             }
             Message::PixelFormatChanged(pixel_format) => {
                 self.pixel_format.selected = pixel_format;
-                self.pixel_format.component_order = pixel_format.default_order()
+                self.pixel_format.component_order = pixel_format.default_order();
             }
             Message::OrderChanged(order) => self.pixel_format.component_order = order,
             Message::EndianChanged(endian) => self.pixel_format.endian = endian,
             Message::IgnoreAlphaChanged(val) => self.ignore_alpha = val,
             Message::ImageFormatChanged(image_format) => self.image_format = image_format,
             Message::PaletteBppChanged(bpp) => self.palette.bpp = bpp,
-            Message::ProcessImage => match process_image(&self) {
+            Message::ProcessImage => process = true,
+            Message::FilterChanged(filter_method) => {
+                self.filter_method = filter_method;
+                return;
+            }
+        }
+
+        if self.image.is_some() {
+            process = true;
+        }
+
+        if process {
+            match process_image(&self) {
                 Ok(handle) => {
                     self.image = Some(handle);
                     self.error = None
@@ -79,8 +93,7 @@ impl App {
                 Err(message) => {
                     self.error = Some(message);
                 }
-            },
-            Message::FilterChanged(filter_method) => self.filter_method = filter_method,
+            }
         }
     }
 
