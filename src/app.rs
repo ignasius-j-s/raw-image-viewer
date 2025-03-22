@@ -131,7 +131,7 @@ impl App {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        iced::theme::Theme::CatppuccinMocha
+        iced::theme::Theme::CatppuccinMacchiato
     }
 
     pub fn key_subs(&self) -> iced::Subscription<Message> {
