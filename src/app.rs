@@ -1,8 +1,5 @@
 use std::fs::File;
-use std::io::SeekFrom::*;
-use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::slice::ChunksExact;
 
 use iced::{
     Element, Length,
@@ -10,19 +7,22 @@ use iced::{
     keyboard::{Key, Modifiers, key::Named},
     widget::{
         Checkbox, Column, Container, Row, Stack, button, checkbox, column, container,
+        horizontal_space,
         image::{FilterMethod, Handle, viewer},
         radio, row, stack, text, text_input, vertical_space,
     },
 };
 
+mod image;
 mod image_format;
 mod message;
 mod pixel_format;
 
 use crate::SPACING;
-use image_format::{Bpp, ImageFormat, PaletteInfo};
-use message::{Message, TextInput};
-use pixel_format::{Endian, PixelFormat, PixelFormatState};
+use image::Image;
+use image_format::{ImageFormat, PaletteInfo};
+use message::{Message, SaveFormat, TextInput};
+use pixel_format::PixelFormatState;
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -46,6 +46,7 @@ impl App {
 
     pub fn update(&mut self, message: Message) {
         let mut process = false;
+        let mut save: Option<SaveFormat> = None;
 
         match message {
             Message::PickFile => {
@@ -75,6 +76,7 @@ impl App {
             Message::ImageFormatChanged(image_format) => self.image_format = image_format,
             Message::PaletteBppChanged(bpp) => self.palette.bpp = bpp,
             Message::ProcessImage => process = true,
+            Message::SaveImage(format) => save = Some(format),
             Message::FilterChanged(filter_method) => {
                 self.filter_method = filter_method;
                 return;
@@ -86,7 +88,7 @@ impl App {
         }
 
         if process {
-            match process_image(self) {
+            match self.process_image() {
                 Ok(handle) => {
                     self.image = Some(handle);
                     self.error = None
@@ -94,6 +96,25 @@ impl App {
                 Err(message) => {
                     self.error = Some(message);
                 }
+            }
+        }
+
+        if let Some(format) = save {
+            let Some(handle) = self.image.as_ref() else {
+                self.error = Some("no image to save".to_string());
+                return;
+            };
+
+            let Some(path) = rfd::FileDialog::new()
+                .set_title("Save")
+                .add_filter("", format.extension())
+                .save_file()
+            else {
+                return;
+            };
+
+            if let Err(message) = App::save_image(handle, format, path) {
+                self.error = Some(format!("failed to save image. {message}"));
             }
         }
     }
@@ -104,10 +125,10 @@ impl App {
         let offset = TextInput::Offset.view("Offset:", &self.offset);
         let pixel_format_view = self.pixel_format_view();
         let image_format_view = self.image_format_view();
-        let process_button = self.process_button();
+        let buttons_view = self.buttons_view();
         let error_view = self.error_view();
 
-        let image_viewer = self.image_view().width(Length::FillPortion(4));
+        let image_viewer = self.image_view().width(Length::Fill);
         let left_view = column![
             filepath_view,
             dim_view,
@@ -117,11 +138,11 @@ impl App {
             vertical_space(),
             Column::new()
                 .push_maybe(error_view)
-                .push(process_button)
+                .push(buttons_view)
                 .spacing(SPACING)
         ]
         .spacing(SPACING)
-        .width(Length::FillPortion(3));
+        .width(280);
 
         let main_view = row![left_view, image_viewer].spacing(SPACING);
 
@@ -137,6 +158,55 @@ impl App {
 
     pub fn key_subs(&self) -> iced::Subscription<Message> {
         iced::keyboard::on_key_press(Self::on_key_enter)
+    }
+
+    fn process_image(&self) -> Result<Handle, String> {
+        let path = self.filepath.as_deref().ok_or("file is empty")?;
+        let width: usize = self.width.parse().map_err(|_| "width is empty")?;
+        let height: usize = self.height.parse().map_err(|_| "height is empty")?;
+        let offset: usize = self.offset.parse().map_err(|_| "offset is empty")?;
+
+        if width == 0 || height == 0 {
+            return Err("width or height cannot be zero".into());
+        }
+
+        let file = File::open(path).map_err(|err| err.to_string())?;
+
+        match self.image_format {
+            ImageFormat::Linear => Image::linear(self, file, width, height, offset),
+            ImageFormat::Indexed => Image::indexed(self, file, width, height, offset),
+        }
+    }
+
+    fn save_image(handle: &Handle, format: SaveFormat, path: PathBuf) -> Result<(), String> {
+        let Handle::Rgba {
+            width,
+            height,
+            pixels,
+            ..
+        } = &handle
+        else {
+            unreachable!();
+        };
+
+        match format {
+            SaveFormat::Rgba => {
+                std::fs::write(path, pixels).map_err(|err| err.kind().to_string())?;
+            }
+            SaveFormat::Png => {
+                let file = std::fs::File::create(path).map_err(|err| err.kind().to_string())?;
+                let mut encoder = png::Encoder::new(file, *width, *height);
+
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                encoder
+                    .write_header()
+                    .and_then(|mut wr| wr.write_image_data(pixels))
+                    .map_err(|err| err.to_string())?;
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -192,8 +262,16 @@ impl App {
             .spacing(SPACING)
     }
 
-    pub fn process_button(&self) -> button::Button<Message> {
-        button("Process").on_press(Message::ProcessImage)
+    pub fn buttons_view(&self) -> Row<Message> {
+        let rgba_save = button("Save (rgba)")
+            .on_press(Message::SaveImage(SaveFormat::Rgba))
+            .style(button::secondary);
+        let png_save = button("Save (png)")
+            .on_press(Message::SaveImage(SaveFormat::Png))
+            .style(button::success);
+        let process = button("Process").on_press(Message::ProcessImage);
+
+        row![process, horizontal_space(), rgba_save, png_save].spacing(SPACING)
     }
 
     pub fn image_view(&self) -> Stack<Message> {
@@ -270,243 +348,4 @@ impl App {
             _ => None,
         }
     }
-}
-
-fn process_image(app: &App) -> Result<Handle, String> {
-    let path = app.filepath.as_deref().ok_or("file is empty")?;
-    let width = app.width.parse::<usize>().map_err(|_| "width is empty")?;
-    let height = app.height.parse::<usize>().map_err(|_| "height is empty")?;
-    let offset = app.offset.parse::<usize>().map_err(|_| "offset is empty")?;
-
-    if width == 0 || height == 0 {
-        return Err("width or height cannot be zero".into());
-    }
-
-    let file = File::open(path).map_err(|err| err.to_string())?;
-
-    match app.image_format {
-        ImageFormat::Linear => linear_image(app, file, width, height, offset),
-        ImageFormat::Indexed => indexed_image(app, file, width, height, offset),
-    }
-}
-
-pub fn linear_image(
-    app: &App,
-    mut file: File,
-    w: usize,
-    h: usize,
-    offset: usize,
-) -> Result<Handle, String> {
-    let pixel_format = app.pixel_format.selected;
-    let pixel_count = w * h;
-    let bytes_per_pixel = pixel_format.bytes_per_pixel();
-
-    let mut pixel_data = vec![0; pixel_count * bytes_per_pixel];
-    file.seek(Start(offset as _))
-        .map_err(|err| err.to_string())?;
-    file.read_exact(&mut pixel_data)
-        .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
-
-    let pixel_chunks = pixel_data.chunks_exact(bytes_per_pixel);
-    let mut rgba = vec![0; w * h * 4];
-    fill_rgba(app, &mut rgba, pixel_chunks)?;
-
-    Ok(Handle::from_rgba(w as _, h as _, rgba))
-}
-
-fn indexed_image(
-    app: &App,
-    mut file: File,
-    w: usize,
-    h: usize,
-    offset: usize,
-) -> Result<Handle, String> {
-    let palette = &app.palette;
-    let palette_offset = palette.offset().map_err(|_| "palette offset is empty")?;
-
-    let pixel_format = app.pixel_format.selected;
-    let color_count = palette.color_count();
-    let bytes_per_color = pixel_format.bytes_per_pixel();
-
-    let mut palette_data = vec![0; color_count * bytes_per_color];
-    file.seek(Start(palette_offset as _))
-        .map_err(|err| err.to_string())?;
-    file.read_exact(&mut palette_data)
-        .map_err(|err| format!("failed to fill palette data buffer. {}", err.kind()))?;
-
-    let color_chunks = palette_data.chunks_exact(bytes_per_color);
-    let mut palette_rgba = vec![0; color_count * 4];
-    fill_rgba(app, &mut palette_rgba, color_chunks)?;
-
-    let mut pixel_data = match palette.bpp {
-        Bpp::Bpp4 => vec![0; w * h / 2],
-        Bpp::Bpp8 => vec![0; w * h],
-    };
-    file.seek(Start(offset as _))
-        .map_err(|err| err.to_string())?;
-    file.read_exact(&mut pixel_data)
-        .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
-
-    let mut rgba = vec![0; w * h * 4];
-    match palette.bpp {
-        Bpp::Bpp4 => {
-            for (i, pixels) in pixel_data.into_iter().enumerate() {
-                let src1 = (pixels & 0xF) as usize * 4;
-                let src2 = ((pixels & 0xF0) >> 4) as usize * 4;
-                let dst1 = i * 2 * 4;
-                let dst2 = dst1 + 4;
-
-                rgba[dst1..dst1 + 4].clone_from_slice(&palette_rgba[src1..src1 + 4]);
-                rgba[dst2..dst2 + 4].clone_from_slice(&palette_rgba[src2..src2 + 4]);
-            }
-        }
-        Bpp::Bpp8 => {
-            for (i, pixel) in pixel_data.into_iter().enumerate() {
-                let src = pixel as usize * 4;
-                let dst = i * 4;
-
-                rgba[dst..dst + 4].clone_from_slice(&palette_rgba[src..src + 4]);
-            }
-        }
-    }
-
-    Ok(Handle::from_rgba(w as _, h as _, rgba))
-}
-
-fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), String> {
-    use pixel_format::{rgb_order, rgba_order};
-
-    let pixel_format = app.pixel_format.selected;
-    let Some(order) = pixel_format.valid_order(&app.pixel_format.component_order) else {
-        return Err("invalid component order".into());
-    };
-
-    match pixel_format {
-        PixelFormat::RGBA8888 => {
-            let (r_i, g_i, b_i, a_i) = rgba_order(&order)?;
-
-            for (i, chunk) in chunks.enumerate() {
-                let a = if app.ignore_alpha { 255 } else { chunk[a_i] };
-
-                rgba[i * 4] = chunk[r_i];
-                rgba[i * 4 + 1] = chunk[g_i];
-                rgba[i * 4 + 2] = chunk[b_i];
-                rgba[i * 4 + 3] = a;
-            }
-        }
-        PixelFormat::RGB888 => {
-            let (r_i, g_i, b_i) = rgb_order(&order)?;
-            let a = 255;
-
-            for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4] = chunk[r_i];
-                rgba[i * 4 + 1] = chunk[g_i];
-                rgba[i * 4 + 2] = chunk[b_i];
-                rgba[i * 4 + 3] = a;
-            }
-        }
-        PixelFormat::RGBA4444 => {
-            let (r_i, g_i, b_i, a_i) = rgba_order(&order)?;
-            let mut color = [0, 0, 0, 0];
-
-            for (i, chunk) in chunks.enumerate() {
-                let pixel = match app.pixel_format.endian {
-                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
-                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
-                };
-
-                color[0] = (pixel & 0xF) as u8 * 17;
-                color[1] = ((pixel & 0xF0) >> 4) as u8 * 17;
-                color[2] = ((pixel & 0xF00) >> 8) as u8 * 17;
-                color[3] = ((pixel & 0xF000) >> 12) as u8 * 17;
-
-                let a = if app.ignore_alpha { 255 } else { color[a_i] };
-
-                rgba[i * 4] = color[r_i];
-                rgba[i * 4 + 1] = color[g_i];
-                rgba[i * 4 + 2] = color[b_i];
-                rgba[i * 4 + 3] = a;
-            }
-        }
-        PixelFormat::RGBA5551 => {
-            let (r_i, g_i, b_i, a_i) = rgba_order(&order)?;
-            let mut color = [0, 0, 0, 0];
-
-            for (i, chunk) in chunks.enumerate() {
-                let pixel = match app.pixel_format.endian {
-                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
-                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
-                };
-
-                color[0] = (pixel & 0x1F) as u8 * 8;
-                color[1] = ((pixel & 0x3E0) >> 5) as u8 * 8;
-                color[2] = ((pixel & 0x7C00) >> 10) as u8 * 8;
-                color[3] = ((pixel & 0x8000) >> 15) as u8 * 255;
-
-                color[0] += color[0] / 32;
-                color[1] += color[1] / 32;
-                color[2] += color[2] / 32;
-
-                let a = if app.ignore_alpha { 255 } else { color[a_i] };
-
-                rgba[i * 4] = color[r_i];
-                rgba[i * 4 + 1] = color[g_i];
-                rgba[i * 4 + 2] = color[b_i];
-                rgba[i * 4 + 3] = a;
-            }
-        }
-        PixelFormat::RGB565 => {
-            let (r_i, g_i, b_i) = rgb_order(&order)?;
-            let mut color = [0, 0, 0];
-            let a = 255;
-
-            for (i, chunk) in chunks.enumerate() {
-                let pixel = match app.pixel_format.endian {
-                    Endian::LE => u16::from_le_bytes([chunk[0], chunk[1]]),
-                    Endian::BE => u16::from_be_bytes([chunk[0], chunk[1]]),
-                };
-
-                color[0] = (pixel & 0x1F) as u8 * 8;
-                color[1] = ((pixel & 0x7E0) >> 5) as u8 * 4;
-                color[2] = ((pixel & 0xF800) >> 11) as u8 * 8;
-
-                color[0] += color[0] / 32;
-                color[1] += color[1] / 64;
-                color[2] += color[2] / 32;
-
-                rgba[i * 4] = color[r_i];
-                rgba[i * 4 + 1] = color[g_i];
-                rgba[i * 4 + 2] = color[b_i];
-                rgba[i * 4 + 3] = a;
-            }
-        }
-        PixelFormat::R8 => {
-            for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4] = chunk[0];
-                rgba[i * 4 + 3] = 255;
-            }
-        }
-        PixelFormat::G8 => {
-            for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4 + 1] = chunk[0];
-                rgba[i * 4 + 3] = 255;
-            }
-        }
-        PixelFormat::B8 => {
-            for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4 + 2] = chunk[0];
-                rgba[i * 4 + 3] = 255;
-            }
-        }
-        PixelFormat::L8 => {
-            for (i, chunk) in chunks.enumerate() {
-                rgba[i * 4] = chunk[0];
-                rgba[i * 4 + 1] = chunk[0];
-                rgba[i * 4 + 2] = chunk[0];
-                rgba[i * 4 + 3] = 255;
-            }
-        }
-    }
-
-    Ok(())
 }

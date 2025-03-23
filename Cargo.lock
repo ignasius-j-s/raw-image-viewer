@@ -2851,6 +2851,7 @@ name = "raw-image-viewer"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "png",
  "rfd",
 ]
 

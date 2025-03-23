@@ -20,6 +20,7 @@ pub enum Message {
     ImageFormatChanged(ImageFormat),
     PaletteBppChanged(Bpp),
     ProcessImage,
+    SaveImage(SaveFormat),
     FilterChanged(FilterMethod),
 }
 
@@ -41,5 +42,21 @@ impl TextInput {
         row![label, input]
             .spacing(SPACING)
             .align_y(Vertical::Center)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SaveFormat {
+    Rgba,
+    #[default]
+    Png,
+}
+
+impl SaveFormat {
+    pub fn extension(&self) -> &'static [&'static str] {
+        match self {
+            SaveFormat::Rgba => &[],
+            SaveFormat::Png => &["png"],
+        }
     }
 }
