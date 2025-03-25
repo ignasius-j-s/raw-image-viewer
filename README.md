@@ -4,7 +4,7 @@ Raw Image Viewer is a GUI tool to help analyzing an unknown image file format.
 
 ## TODOs
 - ~~Indexed image~~
-- Tiled image
+- ~~Tiled image~~
 - DXTn
 
 ## Building

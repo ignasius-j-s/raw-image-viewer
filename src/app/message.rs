@@ -30,6 +30,8 @@ pub enum TextInput {
     Height,
     Offset,
     PaletteOffset,
+    TileWidth,
+    TileHeight,
 }
 
 impl TextInput {

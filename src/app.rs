@@ -7,7 +7,7 @@ use iced::{
     keyboard::{Key, Modifiers, key::Named},
     widget::{
         Checkbox, Column, Container, Row, Stack, button, checkbox, column, container,
-        horizontal_space,
+        horizontal_rule, horizontal_space,
         image::{FilterMethod, Handle, viewer},
         radio, row, stack, text, text_input, vertical_space,
     },
@@ -20,11 +20,11 @@ mod pixel_format;
 
 use crate::SPACING;
 use image::Image;
-use image_format::{ImageFormat, PaletteInfo};
+use image_format::{ImageFormat, PaletteInfo, TileInfo};
 use message::{Message, SaveFormat, TextInput};
 use pixel_format::PixelFormatState;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
     filepath: Option<PathBuf>,
     width: String,
@@ -34,9 +34,29 @@ pub struct App {
     ignore_alpha: bool,
     image_format: ImageFormat,
     palette: PaletteInfo,
+    tile: TileInfo,
     image: Option<Handle>,
     error: Option<String>,
     filter_method: FilterMethod,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            filepath: None,
+            width: 2.to_string(),
+            height: 2.to_string(),
+            offset: 0.to_string(),
+            pixel_format: Default::default(),
+            ignore_alpha: false,
+            image_format: Default::default(),
+            palette: Default::default(),
+            tile: TileInfo::default(),
+            image: None,
+            error: None,
+            filter_method: FilterMethod::Nearest,
+        }
+    }
 }
 
 impl App {
@@ -63,6 +83,8 @@ impl App {
                         TextInput::Height => self.height = input,
                         TextInput::Offset => self.offset = input,
                         TextInput::PaletteOffset => self.palette.offset = input,
+                        TextInput::TileWidth => self.tile.width = input,
+                        TextInput::TileHeight => self.tile.height = input,
                     }
                 }
             }
@@ -134,6 +156,7 @@ impl App {
             dim_view,
             offset,
             pixel_format_view,
+            horizontal_rule(1),
             image_format_view,
             vertical_space(),
             Column::new()
@@ -175,6 +198,7 @@ impl App {
         match self.image_format {
             ImageFormat::Linear => Image::linear(self, file, width, height, offset),
             ImageFormat::Indexed => Image::indexed(self, file, width, height, offset),
+            ImageFormat::Tiled => Image::tiled(self, file, width, height, offset),
         }
     }
 
@@ -255,11 +279,14 @@ impl App {
 
     pub fn image_format_view(&self) -> Column<Message> {
         let image_format_view = self.image_format.view();
-        let palette_info_view = self.palette.view(self.image_format.use_palette());
 
-        column![image_format_view]
-            .push_maybe(palette_info_view)
-            .spacing(SPACING)
+        let view: Option<Element<Message>> = match self.image_format {
+            ImageFormat::Linear => None,
+            ImageFormat::Indexed => self.palette.view().into(),
+            ImageFormat::Tiled => self.tile.view().into(),
+        };
+
+        column![image_format_view].push_maybe(view).spacing(SPACING)
     }
 
     pub fn buttons_view(&self) -> Row<Message> {

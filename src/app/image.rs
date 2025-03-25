@@ -98,6 +98,66 @@ impl Image {
 
         Ok(Self::new_handle(w as _, h as _, rgba))
     }
+
+    pub fn tiled(
+        app: &App,
+        mut file: File,
+        w: usize,
+        h: usize,
+        offset: usize,
+    ) -> Result<Handle, String> {
+        let tile_w = app.tile.width().map_err(|_| "tile width is empty")?;
+        let tile_h = app.tile.height().map_err(|_| "tile height is empty")?;
+
+        if w % tile_w != 0 {
+            return Err("width is not divisible by tile width".to_owned());
+        }
+        if h % tile_h != 0 {
+            return Err("height is not divisible by tile height".to_owned());
+        }
+
+        let tile_row = w / tile_w;
+        let tile_col = h / tile_h;
+        let tile_count = tile_row * tile_col;
+
+        let mut tiles = Vec::with_capacity(tile_count);
+
+        let pixel_format = app.pixel_format.selected;
+        let pixel_count = tile_w * tile_h;
+        let bytes_per_pixel = pixel_format.bytes_per_pixel();
+
+        let mut pixel_datas = vec![0; pixel_count * bytes_per_pixel * tile_count];
+        file.seek(Start(offset as _))
+            .map_err(|err| err.to_string())?;
+        file.read_exact(&mut pixel_datas)
+            .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
+
+        for pixel_data in pixel_datas.chunks_exact(pixel_count * bytes_per_pixel) {
+            let mut tile_rgba = vec![0; tile_w * tile_h * 4];
+            let chunks = pixel_data.chunks_exact(bytes_per_pixel);
+
+            fill_rgba(app, &mut tile_rgba, chunks)?;
+
+            tiles.push(tile_rgba);
+        }
+
+        let mut rgba = vec![0; w * h * 4];
+
+        for y in 0..h {
+            for x in 0..w {
+                let tile_x = x / tile_w;
+                let tile_y = y / tile_h;
+                let tile = &tiles[tile_y * tile_row + tile_x];
+
+                let src = ((y % tile_h) * tile_w + (x % tile_w)) * 4;
+                let dst = (y * w + x) * 4;
+
+                rgba[dst..dst + 4].copy_from_slice(&tile[src..src + 4]);
+            }
+        }
+
+        Ok(Self::new_handle(w as _, h as _, rgba))
+    }
 }
 
 fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), String> {

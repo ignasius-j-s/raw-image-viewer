@@ -1,4 +1,7 @@
-use iced::widget::{Column, Row, column, radio, row, text};
+use iced::{
+    Element,
+    widget::{Row, column, radio, row},
+};
 
 use super::message::{Message, TextInput};
 use crate::SPACING;
@@ -8,11 +11,11 @@ pub enum ImageFormat {
     #[default]
     Linear,
     Indexed,
+    Tiled,
 }
 
 impl ImageFormat {
     pub fn view(&self) -> Row<Message> {
-        let label = text("Image Format:");
         let linear = radio(
             "Linear",
             Self::Linear,
@@ -25,27 +28,34 @@ impl ImageFormat {
             Some(*self),
             Message::ImageFormatChanged,
         );
+        let tiled = radio(
+            "Tiled",
+            Self::Tiled,
+            Some(*self),
+            Message::ImageFormatChanged,
+        );
 
-        row![label, linear, linear_indexed].spacing(SPACING)
-    }
-
-    pub fn use_palette(&self) -> bool {
-        *self == Self::Indexed
+        row![linear, linear_indexed, tiled].spacing(SPACING)
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PaletteInfo {
     pub offset: String,
     pub bpp: Bpp,
 }
 
-impl PaletteInfo {
-    pub fn view(&self, show: bool) -> Option<Column<Message>> {
-        if !show {
-            return None;
+impl Default for PaletteInfo {
+    fn default() -> Self {
+        Self {
+            offset: 0.to_string(),
+            bpp: Default::default(),
         }
+    }
+}
 
+impl PaletteInfo {
+    pub fn view(&self) -> Element<Message> {
         let pal_view = TextInput::PaletteOffset.view("Palette offset:", &self.offset);
         let bpp_view = self.bpp.view();
 
@@ -57,7 +67,7 @@ impl PaletteInfo {
     }
 
     pub fn offset(&self) -> Result<usize, std::num::ParseIntError> {
-        self.offset.parse::<usize>()
+        self.offset.parse()
     }
 }
 
@@ -81,5 +91,37 @@ impl Bpp {
             Bpp::Bpp4 => 16,
             Bpp::Bpp8 => 256,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TileInfo {
+    pub width: String,
+    pub height: String,
+}
+
+impl Default for TileInfo {
+    fn default() -> Self {
+        Self {
+            width: 2.to_string(),
+            height: 2.to_string(),
+        }
+    }
+}
+
+impl TileInfo {
+    pub fn view(&self) -> Element<Message> {
+        let width = TextInput::TileWidth.view("Tile width:", &self.width);
+        let height = TextInput::TileHeight.view("Tile height:", &self.height);
+
+        row![width, height].spacing(SPACING).into()
+    }
+
+    pub fn width(&self) -> Result<usize, std::num::ParseIntError> {
+        self.width.parse()
+    }
+
+    pub fn height(&self) -> Result<usize, std::num::ParseIntError> {
+        self.height.parse()
     }
 }
