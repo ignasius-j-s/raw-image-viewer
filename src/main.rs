@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use app::App;
 use iced::{Settings, Size};
 
