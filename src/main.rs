@@ -10,8 +10,8 @@ const LABEL_WIDTH: u16 = 50;
 
 fn main() -> Result<(), iced::Error> {
     let size = Size {
-        width: 720.,
-        height: 460.,
+        width: 780.,
+        height: 520.,
     };
     let setting = Settings {
         default_text_size: 13.0.into(),
