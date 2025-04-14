@@ -40,7 +40,7 @@ impl Image {
         Ok(Self::new_handle(w as _, h as _, rgba))
     }
 
-    pub fn indexed(
+    pub fn linear_indexed(
         app: &App,
         mut file: File,
         w: usize,
@@ -137,6 +137,103 @@ impl Image {
             let chunks = pixel_data.chunks_exact(bytes_per_pixel);
 
             fill_rgba(app, &mut tile_rgba, chunks)?;
+
+            tiles.push(tile_rgba);
+        }
+
+        let mut rgba = vec![0; w * h * 4];
+
+        for y in 0..h {
+            for x in 0..w {
+                let tile_x = x / tile_w;
+                let tile_y = y / tile_h;
+                let tile = &tiles[tile_y * tile_row + tile_x];
+
+                let src = ((y % tile_h) * tile_w + (x % tile_w)) * 4;
+                let dst = (y * w + x) * 4;
+
+                rgba[dst..dst + 4].copy_from_slice(&tile[src..src + 4]);
+            }
+        }
+
+        Ok(Self::new_handle(w as _, h as _, rgba))
+    }
+
+    pub fn tiled_indexed(
+        app: &App,
+        mut file: File,
+        w: usize,
+        h: usize,
+        offset: usize,
+    ) -> Result<Handle, String> {
+        let palette = &app.palette;
+        let palette_offset = palette.offset().map_err(|_| "palette offset is empty")?;
+        let pixel_format = app.pixel_format.selected;
+        let color_count = palette.color_count();
+        let bytes_per_color = pixel_format.bytes_per_pixel();
+
+        let tile_w = app.tile.width().map_err(|_| "tile width is empty")?;
+        let tile_h = app.tile.height().map_err(|_| "tile height is empty")?;
+        if w % tile_w != 0 {
+            return Err("width is not divisible by tile width".to_owned());
+        }
+        if h % tile_h != 0 {
+            return Err("height is not divisible by tile height".to_owned());
+        }
+
+        let tile_row = w / tile_w;
+        let tile_col = h / tile_h;
+        let tile_count = tile_row * tile_col;
+        let tile_pixel_count = tile_w * tile_h;
+
+        let mut palette_data = vec![0; color_count * bytes_per_color];
+        file.seek(Start(palette_offset as _))
+            .map_err(|err| err.to_string())?;
+        file.read_exact(&mut palette_data)
+            .map_err(|err| format!("failed to fill palette data buffer. {}", err.kind()))?;
+
+        let color_chunks = palette_data.chunks_exact(bytes_per_color);
+        let mut palette_rgba = vec![0; color_count * 4];
+        fill_rgba(app, &mut palette_rgba, color_chunks)?;
+
+        let mut pixel_datas = match palette.bpp {
+            Bpp::Bpp4 => vec![0; w * h / 2],
+            Bpp::Bpp8 => vec![0; w * h],
+        };
+        file.seek(Start(offset as _))
+            .map_err(|err| err.to_string())?;
+        file.read_exact(&mut pixel_datas)
+            .map_err(|err| format!("failed to fill pixel data buffer. {}", err.kind()))?;
+
+        let mut tiles = Vec::with_capacity(tile_count);
+        let chunk_count = match palette.bpp {
+            Bpp::Bpp4 => tile_pixel_count / 2,
+            Bpp::Bpp8 => tile_pixel_count,
+        };
+        for pixel_data in pixel_datas.chunks_exact(chunk_count) {
+            let mut tile_rgba = vec![0; tile_w * tile_h * 4];
+
+            match palette.bpp {
+                Bpp::Bpp4 => {
+                    for (i, &pixels) in pixel_data.into_iter().enumerate() {
+                        let src1 = (pixels & 0xF) as usize * 4;
+                        let src2 = ((pixels & 0xF0) >> 4) as usize * 4;
+                        let dst1 = i * 2 * 4;
+                        let dst2 = dst1 + 4;
+
+                        tile_rgba[dst1..dst1 + 4].clone_from_slice(&palette_rgba[src1..src1 + 4]);
+                        tile_rgba[dst2..dst2 + 4].clone_from_slice(&palette_rgba[src2..src2 + 4]);
+                    }
+                }
+                Bpp::Bpp8 => {
+                    for (i, &pixel) in pixel_data.into_iter().enumerate() {
+                        let src = pixel as usize * 4;
+                        let dst = i * 4;
+
+                        tile_rgba[dst..dst + 4].clone_from_slice(&palette_rgba[src..src + 4]);
+                    }
+                }
+            }
 
             tiles.push(tile_rgba);
         }

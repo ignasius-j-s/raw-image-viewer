@@ -12,10 +12,11 @@ pub enum ImageFormat {
     Linear,
     Indexed,
     Tiled,
+    TiledIndexed,
 }
 
 impl ImageFormat {
-    pub fn view(&self) -> Row<Message> {
+    pub fn view(&self) -> Element<Message> {
         let linear = radio(
             "Linear",
             Self::Linear,
@@ -23,7 +24,7 @@ impl ImageFormat {
             Message::ImageFormatChanged,
         );
         let linear_indexed = radio(
-            "Indexed",
+            "Linear indexed",
             Self::Indexed,
             Some(*self),
             Message::ImageFormatChanged,
@@ -34,8 +35,17 @@ impl ImageFormat {
             Some(*self),
             Message::ImageFormatChanged,
         );
+        let tiled_indexed = radio(
+            "Tiled indexed",
+            Self::TiledIndexed,
+            Some(*self),
+            Message::ImageFormatChanged,
+        );
 
-        row![linear, linear_indexed, tiled].spacing(SPACING)
+        row![linear, linear_indexed, tiled, tiled_indexed]
+            .spacing(SPACING)
+            .wrap()
+            .into()
     }
 }
 

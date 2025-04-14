@@ -197,8 +197,9 @@ impl App {
 
         match self.image_format {
             ImageFormat::Linear => Image::linear(self, file, width, height, offset),
-            ImageFormat::Indexed => Image::indexed(self, file, width, height, offset),
+            ImageFormat::Indexed => Image::linear_indexed(self, file, width, height, offset),
             ImageFormat::Tiled => Image::tiled(self, file, width, height, offset),
+            ImageFormat::TiledIndexed => Image::tiled_indexed(self, file, width, height, offset),
         }
     }
 
@@ -284,6 +285,12 @@ impl App {
             ImageFormat::Linear => None,
             ImageFormat::Indexed => self.palette.view().into(),
             ImageFormat::Tiled => self.tile.view().into(),
+            ImageFormat::TiledIndexed => {
+                let tile_view = self.tile.view();
+                let pal_view = self.palette.view();
+
+                Some(column![tile_view, pal_view].spacing(SPACING).into())
+            }
         };
 
         column![image_format_view].push_maybe(view).spacing(SPACING)
