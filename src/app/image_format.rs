@@ -10,7 +10,7 @@ use crate::SPACING;
 pub enum ImageFormat {
     #[default]
     Linear,
-    Indexed,
+    LinearIndexed,
     Tiled,
     TiledIndexed,
 }
@@ -25,7 +25,7 @@ impl ImageFormat {
         );
         let linear_indexed = radio(
             "Linear indexed",
-            Self::Indexed,
+            Self::LinearIndexed,
             Some(*self),
             Message::ImageFormatChanged,
         );

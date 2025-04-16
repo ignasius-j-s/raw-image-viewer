@@ -197,7 +197,7 @@ impl App {
 
         match self.image_format {
             ImageFormat::Linear => Image::linear(self, file, width, height, offset),
-            ImageFormat::Indexed => Image::linear_indexed(self, file, width, height, offset),
+            ImageFormat::LinearIndexed => Image::linear_indexed(self, file, width, height, offset),
             ImageFormat::Tiled => Image::tiled(self, file, width, height, offset),
             ImageFormat::TiledIndexed => Image::tiled_indexed(self, file, width, height, offset),
         }
@@ -283,7 +283,7 @@ impl App {
 
         let view: Option<Element<Message>> = match self.image_format {
             ImageFormat::Linear => None,
-            ImageFormat::Indexed => self.palette.view().into(),
+            ImageFormat::LinearIndexed => self.palette.view().into(),
             ImageFormat::Tiled => self.tile.view().into(),
             ImageFormat::TiledIndexed => {
                 let tile_view = self.tile.view();
