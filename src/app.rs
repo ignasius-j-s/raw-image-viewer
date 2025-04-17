@@ -51,7 +51,7 @@ impl Default for App {
             ignore_alpha: false,
             image_format: Default::default(),
             palette: Default::default(),
-            tile: TileInfo::default(),
+            tile: Default::default(),
             image: None,
             error: None,
             filter_method: FilterMethod::Nearest,

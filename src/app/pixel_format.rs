@@ -17,7 +17,7 @@ pub struct PixelFormatState {
 
 impl Default for PixelFormatState {
     fn default() -> Self {
-        let default = PixelFormat::default();
+        let default = Default::default();
         Self {
             state: combo_box::State::new(PixelFormat::all()),
             selected: default,
