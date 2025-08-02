@@ -78,7 +78,7 @@ impl Image {
             Bpp::Bpp4 => {
                 for (i, pixels) in pixel_data.into_iter().enumerate() {
                     let src1 = (pixels & 0xF) as usize * 4;
-                    let src2 = ((pixels & 0xF0) >> 4) as usize * 4;
+                    let src2 = ((pixels >> 4) & 0xF) as usize * 4;
                     let dst1 = i * 2 * 4;
                     let dst2 = dst1 + 4;
 
@@ -217,7 +217,7 @@ impl Image {
                 Bpp::Bpp4 => {
                     for (i, &pixels) in pixel_data.into_iter().enumerate() {
                         let src1 = (pixels & 0xF) as usize * 4;
-                        let src2 = ((pixels & 0xF0) >> 4) as usize * 4;
+                        let src2 = ((pixels >> 4) & 0xF) as usize * 4;
                         let dst1 = i * 2 * 4;
                         let dst2 = dst1 + 4;
 
@@ -300,9 +300,9 @@ fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), 
                 };
 
                 color[0] = (pixel & 0xF) as u8 * 17;
-                color[1] = ((pixel & 0xF0) >> 4) as u8 * 17;
-                color[2] = ((pixel & 0xF00) >> 8) as u8 * 17;
-                color[3] = ((pixel & 0xF000) >> 12) as u8 * 17;
+                color[1] = ((pixels >> 4) & 0xF) as u8 * 17;
+                color[2] = ((pixels >> 8) & 0xF) as u8 * 17;
+                color[3] = ((pixels >> 12) & 0xF) as u8 * 17;
 
                 let a = if app.ignore_alpha { 255 } else { color[a_i] };
 
@@ -323,9 +323,9 @@ fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), 
                 };
 
                 color[0] = (pixel & 0x1F) as u8 * 8;
-                color[1] = ((pixel & 0x3E0) >> 5) as u8 * 8;
-                color[2] = ((pixel & 0x7C00) >> 10) as u8 * 8;
-                color[3] = ((pixel & 0x8000) >> 15) as u8 * 255;
+                color[1] = ((pixel >> 5) & 0x1F) as u8 * 8;
+                color[2] = ((pixel >> 10) & 0x1F) as u8 * 8;
+                color[3] = (pixel >> 15) as u8 * 255;
 
                 color[0] += color[0] / 32;
                 color[1] += color[1] / 32;
@@ -351,8 +351,8 @@ fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), 
                 };
 
                 color[0] = (pixel & 0x1F) as u8 * 8;
-                color[1] = ((pixel & 0x7E0) >> 5) as u8 * 4;
-                color[2] = ((pixel & 0xF800) >> 11) as u8 * 8;
+                color[1] = ((pixel >> 5) & 0x3F) as u8 * 4;
+                color[2] = ((pixel >> 11) & 0x1F) as u8 * 8;
 
                 color[0] += color[0] / 32;
                 color[1] += color[1] / 64;
