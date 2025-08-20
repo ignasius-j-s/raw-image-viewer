@@ -300,9 +300,9 @@ fn fill_rgba(app: &App, rgba: &mut [u8], chunks: ChunksExact<u8>) -> Result<(), 
                 };
 
                 color[0] = (pixel & 0xF) as u8 * 17;
-                color[1] = ((pixels >> 4) & 0xF) as u8 * 17;
-                color[2] = ((pixels >> 8) & 0xF) as u8 * 17;
-                color[3] = ((pixels >> 12) & 0xF) as u8 * 17;
+                color[1] = ((pixel >> 4) & 0xF) as u8 * 17;
+                color[2] = ((pixel >> 8) & 0xF) as u8 * 17;
+                color[3] = ((pixel >> 12) & 0xF) as u8 * 17;
 
                 let a = if app.ignore_alpha { 255 } else { color[a_i] };
 
